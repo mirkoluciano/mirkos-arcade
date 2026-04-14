@@ -408,20 +408,28 @@
       const file = e.target.files[0];
       if (!file || !selectedSystem) return;
 
-      const url = URL.createObjectURL(file);
-      launchEmulator(url, file.name, selectedSystem);
       document.querySelector('.rom-loader').style.display = 'none';
-      document.getElementById('status-game').textContent = 'LOADING...';
+      document.getElementById('status-game').textContent = 'READING ROM...';
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const romData = new Uint8Array(evt.target.result);
+        launchEmulator(romData, file.name, selectedSystem);
+        document.getElementById('status-game').textContent = 'LOADING...';
+      };
+      reader.readAsArrayBuffer(file);
     });
 
-    function launchEmulator(romUrl, romName, system) {
+    function launchEmulator(romData, romName, system) {
       const container = document.getElementById('emulator-container');
       container.innerHTML = '';
 
-      // Load EmulatorJS scripts
+      const blob    = new Blob([romData]);
+      const blobUrl = URL.createObjectURL(blob);
+
       window.EJS_player          = '#emulator-container';
-      window.EJS_gameName        = romName;
-      window.EJS_rom             = romUrl;
+      window.EJS_gameName        = romName.replace(/\.[^.]+$/, '');
+      window.EJS_rom             = blobUrl;
       window.EJS_core            = systemMap[system] || system;
       window.EJS_pathtodata      = 'https://cdn.emulatorjs.org/stable/data/';
       window.EJS_startOnLoaded   = true;
@@ -432,13 +440,12 @@
         document.getElementById('status-game').textContent = 'PLAYING';
       };
 
-      // Inject the emulator script fresh each time
       const old = document.getElementById('ejs-script');
       if (old) old.remove();
 
-      const script = document.createElement('script');
-      script.id  = 'ejs-script';
-      script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+      const script  = document.createElement('script');
+      script.id     = 'ejs-script';
+      script.src    = 'https://cdn.emulatorjs.org/stable/data/loader.js';
       document.body.appendChild(script);
       emulatorLoaded = true;
     }
