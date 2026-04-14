@@ -419,13 +419,14 @@
       container.innerHTML = '';
 
       // Load EmulatorJS scripts
-      window.EJS_player       = '#emulator-container';
-      window.EJS_gameName     = romName;
-      window.EJS_rom          = romUrl;
-      window.EJS_core         = systemMap[system] || system;
-      window.EJS_pathtodata   = 'https://cdn.emulatorjs.org/stable/data/';
-      window.EJS_startOnLoaded = true;
+      window.EJS_player          = '#emulator-container';
+      window.EJS_gameName        = romName;
+      window.EJS_rom             = romUrl;
+      window.EJS_core            = systemMap[system] || system;
+      window.EJS_pathtodata      = 'https://cdn.emulatorjs.org/stable/data/';
+      window.EJS_startOnLoaded   = true;
       window.EJS_backgroundColor = '#000000';
+      window.EJS_language        = 'en-US';
 
       window.EJS_onGameStart = function() {
         document.getElementById('status-game').textContent = 'PLAYING';
@@ -436,7 +437,7 @@
       if (old) old.remove();
 
       const script = document.createElement('script');
-      script.id = 'ejs-script';
+      script.id  = 'ejs-script';
       script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
       document.body.appendChild(script);
       emulatorLoaded = true;
