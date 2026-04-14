@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIRKO'S ARCADE</title>
+  <meta name="description" content="Mirko's personal retro arcade emulator" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --neon-pink:  #ff2d78;
+      --neon-cyan:  #00f5ff;
+      --neon-yellow:#ffe600;
+      --neon-green: #39ff14;
+      --bg:         #0a0a0f;
+      --panel:      #10101a;
+      --grid:       rgba(0,245,255,0.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--neon-cyan);
+      font-family: 'Press Start 2P', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── CRT scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,.18) 2px,
+        rgba(0,0,0,.18) 4px
+      );
+    }
+
+    /* ── Grid background ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative; z-index: 10;
+      text-align: center;
+      padding: 2rem 1rem 1rem;
+    }
+
+    .arcade-title {
+      font-size: clamp(1.4rem, 5vw, 2.6rem);
+      color: var(--neon-yellow);
+      text-shadow:
+        0 0 6px  var(--neon-yellow),
+        0 0 20px var(--neon-yellow),
+        0 0 50px #ff8800;
+      letter-spacing: 4px;
+      animation: flicker 4s infinite;
+    }
+
+    .arcade-subtitle {
+      font-family: 'VT323', monospace;
+      font-size: 1.4rem;
+      color: var(--neon-pink);
+      text-shadow: 0 0 8px var(--neon-pink);
+      margin-top: .6rem;
+      letter-spacing: 3px;
+    }
+
+    .insert-coin {
+      font-family: 'VT323', monospace;
+      font-size: 1.1rem;
+      color: var(--neon-green);
+      text-shadow: 0 0 8px var(--neon-green);
+      margin-top: .8rem;
+      animation: blink 1.2s step-end infinite;
+    }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes flicker {
+      0%,95%,100%{opacity:1}
+      96%{opacity:.7}
+      97%{opacity:1}
+      98%{opacity:.5}
+      99%{opacity:1}
+    }
+
+    /* ── CONSOLE SELECTOR ── */
+    #console-select-screen {
+      position: relative; z-index: 10;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .section-label {
+      font-size: .55rem;
+      color: var(--neon-cyan);
+      text-shadow: 0 0 6px var(--neon-cyan);
+      text-align: center;
+      margin-bottom: 1.5rem;
+      letter-spacing: 3px;
+    }
+
+    .console-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+
+    .console-btn {
+      background: var(--panel);
+      border: 2px solid var(--neon-cyan);
+      border-radius: 4px;
+      padding: 1.2rem .5rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all .15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .console-btn::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--neon-cyan);
+      opacity: 0;
+      transition: opacity .15s;
+    }
+
+    .console-btn:hover::before,
+    .console-btn.active::before { opacity: .08; }
+    .console-btn:hover,
+    .console-btn.active {
+      border-color: var(--neon-pink);
+      box-shadow: 0 0 14px var(--neon-pink), inset 0 0 10px rgba(255,45,120,.1);
+    }
+
+    .console-btn.active { border-color: var(--neon-green); box-shadow: 0 0 14px var(--neon-green); }
+
+    .console-icon { font-size: 2rem; display: block; margin-bottom: .6rem; }
+    .console-name {
+      font-size: .45rem;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 4px var(--neon-yellow);
+      line-height: 1.6;
+    }
+
+    /* ── EMULATOR SCREEN ── */
+    #emulator-screen {
+      position: relative; z-index: 10;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1rem 2rem;
+      display: none;
+    }
+
+    .screen-frame {
+      border: 3px solid var(--neon-cyan);
+      box-shadow:
+        0 0 20px var(--neon-cyan),
+        0 0 60px rgba(0,245,255,.15),
+        inset 0 0 20px rgba(0,0,0,.5);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+    }
+
+    .screen-header {
+      background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
+      padding: .4rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .screen-header-title {
+      font-size: .45rem;
+      color: #000;
+      white-space: nowrap;
+    }
+
+    .btn-back {
+      font-family: 'Press Start 2P', monospace;
+      font-size: .4rem;
+      background: #000;
+      color: var(--neon-yellow);
+      border: 1px solid var(--neon-yellow);
+      padding: .3rem .6rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .btn-back:hover { background: var(--neon-yellow); color: #000; }
+
+    #emulator-container { width: 100%; min-height: 400px; background: #000; }
+
+    /* ── ROM LOADER ── */
+    .rom-loader {
+      background: var(--panel);
+      border: 2px dashed var(--neon-pink);
+      border-radius: 4px;
+      padding: 2rem;
+      text-align: center;
+      margin-top: 1rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .rom-loader:hover { border-color: var(--neon-green); box-shadow: 0 0 12px var(--neon-green); }
+    .rom-loader-icon { font-size: 2.5rem; display: block; margin-bottom: .8rem; }
+    .rom-loader-text { font-size: .45rem; color: var(--neon-cyan); line-height: 2; }
+    .rom-loader-sub { font-family: 'VT323', monospace; font-size: 1rem; color: #666; margin-top: .5rem; }
+    #rom-input { display: none; }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative; z-index: 10;
+      text-align: center;
+      padding: 1rem;
+      font-family: 'VT323', monospace;
+      font-size: 1rem;
+      color: #333;
+    }
+
+    /* ── DECORATIVE SIDE BARS ── */
+    .side-deco {
+      position: fixed; top: 0; bottom: 0; width: 4px; z-index: 5;
+    }
+    .side-deco.left  { left: 0;  background: linear-gradient(180deg, var(--neon-pink), var(--neon-cyan), var(--neon-yellow)); }
+    .side-deco.right { right: 0; background: linear-gradient(180deg, var(--neon-yellow), var(--neon-cyan), var(--neon-pink)); }
+
+    /* ── STATUS BAR ── */
+    .status-bar {
+      position: relative; z-index: 10;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      padding: .8rem;
+      font-family: 'VT323', monospace;
+      font-size: 1rem;
+      border-top: 1px solid rgba(0,245,255,.15);
+      border-bottom: 1px solid rgba(0,245,255,.15);
+      margin-bottom: 1.5rem;
+      color: #555;
+    }
+    .status-item span { color: var(--neon-green); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 480px) {
+      .console-grid { grid-template-columns: repeat(3, 1fr); }
+      .console-name { font-size: .38rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="side-deco left"></div>
+  <div class="side-deco right"></div>
+
+  <header>
+    <div class="arcade-title">🕹 MIRKO'S ARCADE 🕹</div>
+    <div class="arcade-subtitle">RETRO GAMING STATION v1.0</div>
+    <div class="insert-coin">▶ INSERT COIN TO CONTINUE ◀</div>
+  </header>
+
+  <div class="status-bar">
+    <div class="status-item">PLAYER <span>1UP</span></div>
+    <div class="status-item">CONSOLE <span id="status-console">---</span></div>
+    <div class="status-item">STATUS <span id="status-game">READY</span></div>
+  </div>
+
+  <!-- CONSOLE SELECTION -->
+  <div id="console-select-screen">
+    <div class="section-label">── SELECT YOUR CONSOLE ──</div>
+    <div class="console-grid">
+      <button class="console-btn" onclick="selectConsole('nes','Nintendo NES','🟥')">
+        <span class="console-icon">🟥</span>
+        <span class="console-name">NINTENDO<br>NES</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('snes','Super Nintendo','🔵')">
+        <span class="console-icon">🔵</span>
+        <span class="console-name">SUPER<br>NINTENDO</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('gba','Game Boy Advance','🟩')">
+        <span class="console-icon">🟩</span>
+        <span class="console-name">GAME BOY<br>ADVANCE</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('gb','Game Boy','⬜')">
+        <span class="console-icon">⬜</span>
+        <span class="console-name">GAME BOY<br>CLASSIC</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('gbc','Game Boy Color','🟨')">
+        <span class="console-icon">🟨</span>
+        <span class="console-name">GAME BOY<br>COLOR</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('segaMD','Sega Mega Drive','🔷')">
+        <span class="console-icon">🔷</span>
+        <span class="console-name">SEGA<br>MEGA DRIVE</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('segaMS','Sega Master System','🔶')">
+        <span class="console-icon">🔶</span>
+        <span class="console-name">SEGA<br>MASTER SYS</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('segaGG','Sega Game Gear','🟠')">
+        <span class="console-icon">🟠</span>
+        <span class="console-name">SEGA<br>GAME GEAR</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('psx','PlayStation 1','🔘')">
+        <span class="console-icon">🔘</span>
+        <span class="console-name">SONY<br>PLAYSTATION</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('n64','Nintendo 64','🟪')">
+        <span class="console-icon">🟪</span>
+        <span class="console-name">NINTENDO<br>64</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('nds','Nintendo DS','🩵')">
+        <span class="console-icon">🩵</span>
+        <span class="console-name">NINTENDO<br>DS</span>
+      </button>
+      <button class="console-btn" onclick="selectConsole('arcade','Arcade / MAME','🔴')">
+        <span class="console-icon">🔴</span>
+        <span class="console-name">ARCADE<br>MAME</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- EMULATOR AREA -->
+  <div id="emulator-screen">
+    <div class="screen-frame">
+      <div class="screen-header">
+        <span class="screen-header-title" id="screen-title">── EMULATOR ──</span>
+        <button class="btn-back" onclick="goBack()">◀ BACK</button>
+      </div>
+      <div id="emulator-container"></div>
+    </div>
+
+    <input type="file" id="rom-input" accept=".nes,.sfc,.smc,.gba,.gb,.gbc,.md,.bin,.sms,.gg,.iso,.n64,.z64,.v64,.nds,.zip" />
+    <div class="rom-loader" onclick="document.getElementById('rom-input').click()">
+      <span class="rom-loader-icon">📁</span>
+      <div class="rom-loader-text">CARICA ROM</div>
+      <div class="rom-loader-sub">Clicca per selezionare il file ROM dal tuo dispositivo</div>
+      <div class="rom-loader-sub">Formati supportati: .nes .sfc .gba .gb .gbc .md .bin .iso .n64 .nds .zip</div>
+    </div>
+  </div>
+
+  <footer>
+    MIRKO'S ARCADE © 2026 — POWERED BY EMULATORJS — ALL YOUR BASE ARE BELONG TO US
+  </footer>
+
+  <script>
+    let selectedSystem = null;
+    let emulatorLoaded = false;
+
+    const systemMap = {
+      'nes':     'nes',
+      'snes':    'snes',
+      'gba':     'gba',
+      'gb':      'gb',
+      'gbc':     'gbc',
+      'segaMD':  'segaMD',
+      'segaMS':  'segaMS',
+      'segaGG':  'segaGG',
+      'psx':     'psx',
+      'n64':     'n64',
+      'nds':     'nds',
+      'arcade':  'arcade',
+    };
+
+    function selectConsole(system, name, icon) {
+      selectedSystem = system;
+      document.getElementById('status-console').textContent = name.toUpperCase();
+      document.getElementById('screen-title').textContent = `── ${name.toUpperCase()} ──`;
+      document.getElementById('console-select-screen').style.display = 'none';
+      document.getElementById('emulator-screen').style.display = 'block';
+      document.getElementById('status-game').textContent = 'WAITING ROM';
+    }
+
+    function goBack() {
+      document.getElementById('emulator-screen').style.display = 'none';
+      document.getElementById('console-select-screen').style.display = 'block';
+      document.getElementById('emulator-container').innerHTML = '';
+      document.getElementById('status-console').textContent = '---';
+      document.getElementById('status-game').textContent = 'READY';
+      emulatorLoaded = false;
+      selectedSystem = null;
+    }
+
+    document.getElementById('rom-input').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file || !selectedSystem) return;
+
+      const url = URL.createObjectURL(file);
+      launchEmulator(url, file.name, selectedSystem);
+      document.querySelector('.rom-loader').style.display = 'none';
+      document.getElementById('status-game').textContent = 'LOADING...';
+    });
+
+    function launchEmulator(romUrl, romName, system) {
+      const container = document.getElementById('emulator-container');
+      container.innerHTML = '';
+
+      // Load EmulatorJS scripts
+      window.EJS_player       = '#emulator-container';
+      window.EJS_gameName     = romName;
+      window.EJS_rom          = romUrl;
+      window.EJS_core         = systemMap[system] || system;
+      window.EJS_pathtodata   = 'https://cdn.emulatorjs.org/stable/data/';
+      window.EJS_startOnLoaded = true;
+      window.EJS_backgroundColor = '#000000';
+
+      window.EJS_onGameStart = function() {
+        document.getElementById('status-game').textContent = 'PLAYING';
+      };
+
+      // Inject the emulator script fresh each time
+      const old = document.getElementById('ejs-script');
+      if (old) old.remove();
+
+      const script = document.createElement('script');
+      script.id = 'ejs-script';
+      script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+      document.body.appendChild(script);
+      emulatorLoaded = true;
+    }
+
+    // PWA service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
